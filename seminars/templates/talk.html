@@ -2,7 +2,7 @@
 
 {% block content %}
 
-{% if user.email in talk.seminar.editors() or user.is_admin %}
+{% if user.email in talk.seminar.editors() or user.is_subject_admin(talk) %}
 <p>{{ talk.send_speaker_link() | safe }}</p>
 {% endif %}
 
@@ -27,6 +27,12 @@ If you are seeking an endorsement, ask someone on <a href="{{ url_for('user.publ
     {% if not talk.is_past() %} {{ talk.show_live_link() | safe }} {% endif %}
     {% if talk.room %} Lecture held in {{ talk.room }}. {% endif %}
   </p>
+
+  {% if talk.topics %}
+  <p>
+    {{talk.show_lang_topics() | safe}}
+  </p>
+  {% endif %}
 
   {% if talk.paper_link or talk.slides_link or talk.video_link %}
   <p>({% if talk.paper_link %} {{ talk.show_paper_link() | safe }} {% endif %}

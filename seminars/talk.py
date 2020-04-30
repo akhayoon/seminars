@@ -12,6 +12,9 @@ from seminars.utils import (
     adapt_datetime,
     toggle,
     make_links,
+    topic_dict,
+    languages_dict,
+    topdomain,
 )
 from seminars.seminar import WebSeminar, can_edit_seminar
 from lmfdb.utils import flash_error
@@ -107,7 +110,7 @@ class WebTalk(object):
         but it can also be hidden even if the seminar is public.
         """
         return (self.seminar.owner == current_user.email or
-                current_user.is_admin or
+                current_user.is_subject_admin(self) or
                 self.display and ((self.seminar.visibility is None or self.seminar.visibility > 0) and not self.hidden or
                                   current_user.email in self.seminar.editors()))
 
@@ -121,8 +124,9 @@ class WebTalk(object):
         data = {col: getattr(self, col, None) for col in db.talks.search_cols}
         assert data.get("seminar_id") and data.get("seminar_ctr")
         topics = self.topics if self.topics else []
-        data["subjects"] = ["math"]
-        #data["subjects"] = sorted(set(topic.split("_")[0] for topic in topics))
+        data["subjects"] = sorted(set(topic.split("_")[0] for topic in topics))
+        if not data["subjects"] and topdomain() == "mathseminars.org":
+            data["subjects"] = ["math"]
         try:
             data["edited_by"] = int(current_user.id)
         except (ValueError, AttributeError):
@@ -266,6 +270,19 @@ class WebTalk(object):
             content=Markup.escape(render_template("talk-knowl.html", talk=self)),
         )
 
+    def show_lang_topics(self):
+        if self.language and self.language != "en":
+            ldict = languages_dict()
+            language = '<span class="language_label">%s</span>' % ldict.get(self.language, "Unknown language")
+        else:
+            language = ""
+        if self.topics:
+            subjects = set(topic.split("_", 1)[0] for topic in self.topics)
+            tdict = topic_dict(include_subj=(len(subjects) > 1))
+            return language + "".join('<span class="topic_label">%s</span>' % tdict[topic] for topic in self.topics)
+        else:
+            return language
+
     def show_seminar(self, external=False):
         return self.seminar.show_name(external=external)
 
@@ -297,7 +314,7 @@ class WebTalk(object):
             success = self.live_link
         else:
             if self.live_link.startswith("http"):
-                success = 'Access <a href="%s">online</a>.' % self.live_link
+                success = 'Livestream access: <a href="%s">online</a>.' % self.live_link
             else:
                 success = "Livestream access: %s" % self.live_link
         if self.access == "open":
@@ -356,7 +373,7 @@ class WebTalk(object):
         # that takes a seminar's shortname as an argument
         # and returns various error messages if not editable
         return (
-            current_user.is_admin
+            current_user.is_subject_admin(self)
             or current_user.email_confirmed
             and (
                 current_user.email.lower() in self.seminar.editors()
@@ -421,11 +438,11 @@ class WebTalk(object):
             return "<p>TBA</p>"
 
     def speaker_link(self):
-        return "https://mathseminars.org/edit/talk/%s/%s/%s" % (
-            self.seminar_id,
-            self.seminar_ctr,
-            self.token,
-        )
+        return url_for("create.edit_talk_with_token",
+                       seminar_id=self.seminar_id,
+                       seminar_ctr=self.seminar_ctr,
+                       token=self.token,
+                       _external=True, _scheme='https')
 
     def send_speaker_link(self):
         """
@@ -484,12 +501,16 @@ Email link to speaker
         event.add("UID", "%s/%s" % (self.seminar_id, self.seminar_ctr))
         return event
 
+    @property
+    def subjects(self):
+        # derived from topics
+        return sorted(set(topic.split("_", 1)[0] for topic in self.topics))
 
 def talks_header(include_seminar=True, include_subscribe=True, datetime_header="Your time"):
     cols = []
     cols.append((' colspan="2" class="yourtime"', datetime_header))
     if include_seminar:
-        cols.append((' class="seminar"', "Seminar"))
+        cols.append((' class="seminar"', "Series"))
     cols.append((' class="speaker"', "Speaker"))
     cols.append((' class="title"', "Title"))
     if include_subscribe:
