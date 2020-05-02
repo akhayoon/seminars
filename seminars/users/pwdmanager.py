@@ -192,7 +192,10 @@ class SeminarsUser(UserMixin):
                 raise Exception("Email is not a string, %s" % email)
             query = {"email": ilike_query(email)}
         else:
-            query = {"id": int(uid)}
+            try:
+                query = {"id": int(uid)}
+            except ValueError:
+                query = {"id": None}
 
         self._authenticated = False
         self._uid = None
@@ -336,22 +339,6 @@ class SeminarsUser(UserMixin):
         self._data["location"] = location
         self._dirty = True
 
-    @property
-    def subjects(self):
-        subjects = self._data.get("subjects")
-        if subjects:
-            return subjects
-        else:
-            cookie = request.cookies.get("subjects", "")
-            if cookie:
-                return [subj.strip() for subj in cookie.split(",")]
-            else:
-                return []
-
-    @subjects.setter
-    def subjects(self, subjects):
-        self._data["subjects"] = subjects
-        self._dirty = True
 
     @property
     def ics(self):
@@ -594,13 +581,6 @@ class SeminarsAnonymousUser(AnonymousUserMixin):
         except UnknownTimeZoneError:
             return timezone("UTC")
 
-    @property
-    def subjects(self):
-        cookie = request.cookies.get("subjects", "")
-        if cookie:
-            return [subj.strip() for subj in cookie.split(",")]
-        else:
-            return []
 
     @property
     def email_confirmed(self):
