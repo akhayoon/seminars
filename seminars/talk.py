@@ -352,6 +352,9 @@ class WebTalk(object):
     def show_video_link(self):
         return '<a href="%s">video</a>'%(self.video_link) if self.video_link else ""
 
+    def show_content_links(self):
+        return '( ' + ' | '.join(filter(None,[self.show_paper_link(), self.show_slides_link(), self.show_video_link()])) + ' )'
+
     @property
     def ics_link(self):
         return url_for("ics_talk_file", semid=self.seminar_id, talkid=self.seminar_ctr,
@@ -459,10 +462,7 @@ class WebTalk(object):
             return ""
 
     def show_abstract(self):
-        if self.abstract:
-            return "<p><b>Abstract</b></p>\n" + "\n".join("<p>%s</p>\n" % (elt) for elt in make_links(self.abstract).split("\n\n"))
-        else:
-            return "<p>Abstract TBA</p>"
+        return "\n".join("<p>%s</p>\n" % (elt) for elt in make_links("<b>Abstract: </b>" + self.abstract).split("\n\n")) if self.abstract else ""
 
     def speaker_link(self):
         return url_for("create.edit_talk_with_token",
@@ -616,20 +616,20 @@ _maxer = SQL(
 
 def _construct(seminar_dict):
     def inner_construct(rec):
-        # The following would break if we had jsonb columns holding dictionaries in the talks table,
-        # but that's not currently true.
-        if not isinstance(rec, dict):
-            return rec
-        else:
-            return WebTalk(
-                rec["seminar_id"],
-                rec["seminar_ctr"],
-                seminar=seminar_dict.get(rec["seminar_id"]),
-                data=rec,
-            )
+        return WebTalk(
+            rec["seminar_id"],
+            rec["seminar_ctr"],
+            seminar=seminar_dict.get(rec["seminar_id"]),
+            data=rec,
+        )
 
     return inner_construct
 
+def _construct_dicts(seminar_dict, objects=True):
+    def inner_construct(rec):
+        return rec
+
+    return inner_construct
 
 def _iterator(seminar_dict):
     def inner_iterator(cur, search_cols, extra_cols, projection):
@@ -669,6 +669,13 @@ def talks_lucky(*args, **kwds):
     """
     seminar_dict = kwds.pop("seminar_dict", {})
     return lucky_distinct(db.talks, _selecter, _construct(seminar_dict), *args, **kwds)
+
+def talks_lucky_dicts(*args, **kwds):
+    """
+    Replacement for db.talks.lucky to account for versioning, return a WebTalk object or None.
+    """
+    seminar_dict = kwds.pop("seminar_dict", {})
+    return lucky_distinct(db.talks, _selecter, _construct_dicts(seminar_dict), *args, **kwds)
 
 
 def talks_lookup(seminar_id, seminar_ctr, projection=3, seminar_dict={}, include_deleted=False):
